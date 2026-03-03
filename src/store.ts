@@ -14,7 +14,15 @@ import {
   writeFileContent,
 } from './serverApi';
 
-export type FileType = 'markdown' | 'javascript' | 'typescript' | 'html' | 'css' | 'json' | 'python';
+export type FileType =
+  | 'markdown'
+  | 'javascript'
+  | 'typescript'
+  | 'html'
+  | 'css'
+  | 'json'
+  | 'python'
+  | 'yaml';
 
 export interface FileItem {
   id: string;
@@ -91,6 +99,7 @@ const getFileType = (name: string): FileType => {
   if (name.endsWith('.css')) return 'css';
   if (name.endsWith('.json')) return 'json';
   if (name.endsWith('.py')) return 'python';
+  if (name.endsWith('.yml') || name.endsWith('.yaml')) return 'yaml';
   return 'markdown';
 };
 const isReadOnlyError = (message: string): boolean =>

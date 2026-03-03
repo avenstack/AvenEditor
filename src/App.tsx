@@ -40,6 +40,11 @@ type AutoSaveEventDetail = {
   savedAt: number;
 };
 
+const isRunnableFileType = (
+  type: string | undefined
+): type is 'javascript' | 'typescript' | 'html' | 'python' =>
+  type === 'javascript' || type === 'typescript' || type === 'html' || type === 'python';
+
 export default function App() {
   const {
     files,
@@ -90,7 +95,8 @@ export default function App() {
   const menuRef = useRef<HTMLDivElement>(null);
   const menuTriggerRef = useRef<HTMLButtonElement>(null);
   const activeFile = files.find(f => f.id === activeFileId);
-  const isCodeFile = activeFile?.type !== 'markdown' && activeFile?.type !== 'json';
+  const activeFileType = activeFile?.type;
+  const isRunnableFile = isRunnableFileType(activeFileType);
 
   const handleExport = () => {
     if (!activeFile) return;
@@ -290,7 +296,7 @@ export default function App() {
               >
                 <Edit3 className="w-4 h-4" />
               </button>
-              {(activeFile?.type === 'markdown' || isCodeFile) && (
+              {(activeFileType === 'markdown' || isRunnableFile) && (
                 <button
                   onClick={() => setViewMode('split')}
                   className={cn(
@@ -298,10 +304,10 @@ export default function App() {
                     viewMode === 'split' ? "bg-accent text-editor-bg" : "text-gray-500"
                   )}
                 >
-                  {isCodeFile ? <Terminal className="w-4 h-4" /> : <Columns className="w-4 h-4" />}
+                  {isRunnableFile ? <Terminal className="w-4 h-4" /> : <Columns className="w-4 h-4" />}
                 </button>
               )}
-              {activeFile?.type === 'markdown' && (
+              {activeFileType === 'markdown' && (
                 <button
                   onClick={() => setViewMode('preview')}
                   className={cn(
@@ -432,12 +438,12 @@ export default function App() {
               "flex-1 min-h-0 min-w-0",
               viewMode === 'split' && "h-1/2"
             )}>
-              {activeFile?.type === 'markdown' ? (
+              {activeFileType === 'markdown' ? (
                 <Preview content={activeFile?.content || ''} />
-              ) : isCodeFile ? (
+              ) : activeFileType && isRunnableFileType(activeFileType) ? (
                 <CodeRunner 
                   code={activeFile?.content || ''} 
-                  type={activeFile?.type as any} 
+                  type={activeFileType} 
                 />
               ) : (
                 <div className="h-full flex items-center justify-center text-gray-600 italic">

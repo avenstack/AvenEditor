@@ -7,6 +7,7 @@ import { html } from '@codemirror/lang-html';
 import { css } from '@codemirror/lang-css';
 import { json } from '@codemirror/lang-json';
 import { python } from '@codemirror/lang-python';
+import { yaml } from '@codemirror/lang-yaml';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { useEditorStore, FileType } from '../store';
 
@@ -108,6 +109,8 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(({ content, type, re
         return json();
       case 'python':
         return python();
+      case 'yaml':
+        return yaml();
       case 'markdown':
       default:
         return markdown({ base: markdownLanguage });

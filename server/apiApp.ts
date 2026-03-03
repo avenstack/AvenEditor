@@ -5,7 +5,7 @@ import path from 'node:path';
 import express from 'express';
 import { IgnoreMatcher, createIgnoreMatcher } from './ignore.js';
 
-type FileType = 'markdown' | 'javascript' | 'typescript' | 'html' | 'css' | 'json' | 'python';
+type FileType = 'markdown' | 'javascript' | 'typescript' | 'html' | 'css' | 'json' | 'python' | 'yaml';
 
 interface SessionData {
   workspace: string;
@@ -91,6 +91,7 @@ const getFileType = (name: string): FileType => {
   if (name.endsWith('.css')) return 'css';
   if (name.endsWith('.json')) return 'json';
   if (name.endsWith('.py')) return 'python';
+  if (name.endsWith('.yml') || name.endsWith('.yaml')) return 'yaml';
   return 'markdown';
 };
 

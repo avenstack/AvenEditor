@@ -29,6 +29,7 @@ Current behavior supports two working modes:
 - `css` (`.css`)
 - `json` (`.json`)
 - `python` (`.py`)
+- `yaml` (`.yml`, `.yaml`)
 
 ## Local Development
 
