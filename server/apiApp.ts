@@ -63,7 +63,7 @@ export const getApiConfig = (defaultPort: number): ApiConfig => ({
   sessionTtlMs: Number(envValue('SESSION_TTL_MS') || 8 * 60 * 60 * 1000),
   maxTreeEntries: Number(envValue('MAX_TREE_ENTRIES') || 5000),
   maxFileSizeBytes: Number(envValue('MAX_FILE_SIZE_BYTES') || 1024 * 1024),
-  ignoreFile: envValue('IGNORE_FILE'),
+  ignoreFile: envValue('IGNORE_FILE') || '.avenignore',
   ignoredDirsEnv: envValue('IGNORE_DIRS') || 'node_modules,.git,dist',
   historyEnabled: (envValue('HISTORY_ENABLED') || 'true').toLowerCase() === 'true',
   historyDir: envValue('HISTORY_DIR') || '.history',
@@ -224,8 +224,15 @@ export const createApiApp = async (config: ApiConfig) => {
   const app = express();
   const sessions = new Map<string, SessionData>();
 
-  // Create ignore matcher on startup
-  const ignoreMatcher = await createIgnoreMatcher(config.ignoreFile, config.ignoredDirsEnv);
+  const getIgnoreMatcherForWorkspace = async (workspace: string): Promise<IgnoreMatcher> => {
+    const configuredPath = config.ignoreFile?.trim();
+    const ignoreFilePath = configuredPath
+      ? path.isAbsolute(configuredPath)
+        ? configuredPath
+        : path.resolve(workspace, configuredPath)
+      : undefined;
+    return createIgnoreMatcher(ignoreFilePath, config.ignoredDirsEnv);
+  };
 
   const getSessionFromAuthHeader = (authorization?: string): { token: string; session: SessionData } | null => {
     if (!authorization || !authorization.startsWith('Bearer ')) {
@@ -266,6 +273,7 @@ export const createApiApp = async (config: ApiConfig) => {
     const files: FileMeta[] = [];
     const folders: FolderMeta[] = [];
     let seen = 0;
+    const ignoreMatcher = await getIgnoreMatcherForWorkspace(workspace);
 
     const walk = async (currentDir: string, relativeDir: string): Promise<void> => {
       const entries = await fs.readdir(currentDir, { withFileTypes: true });
@@ -325,6 +333,7 @@ export const createApiApp = async (config: ApiConfig) => {
     workspace: string,
     parentId: string | null
   ): Promise<{ files: FileMeta[]; folders: FolderMeta[]; parentId: string | null }> => {
+    const ignoreMatcher = await getIgnoreMatcherForWorkspace(workspace);
     const targetDir = parentId ? resolveEntryPath(workspace, parentId) : workspace;
     await ensureDirectory(targetDir);
 

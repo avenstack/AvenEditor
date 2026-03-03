@@ -10,11 +10,12 @@ interface ServerConnectDialogProps {
 
 const getDefaultApiBaseUrl = (): string =>
   typeof window !== 'undefined' ? window.location.origin : '';
+const DEFAULT_WORKSPACE = '/workspace';
 
 export const ServerConnectDialog: React.FC<ServerConnectDialogProps> = ({ isOpen, onClose }) => {
   const { remote, connectToServer, disconnectFromServer, refreshServerTree, clearRemoteError } = useEditorStore();
   const [apiBaseUrl, setApiBaseUrl] = useState(remote.apiBaseUrl || getDefaultApiBaseUrl());
-  const [workspace, setWorkspace] = useState(remote.workspace);
+  const [workspace, setWorkspace] = useState(remote.workspace || DEFAULT_WORKSPACE);
   const [key, setKey] = useState('');
   const [connecting, setConnecting] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -24,7 +25,7 @@ export const ServerConnectDialog: React.FC<ServerConnectDialogProps> = ({ isOpen
       return;
     }
     setApiBaseUrl(remote.apiBaseUrl || getDefaultApiBaseUrl());
-    setWorkspace(remote.workspace || '');
+    setWorkspace(remote.workspace || DEFAULT_WORKSPACE);
     setKey('');
     setLocalError(null);
   }, [isOpen, remote.apiBaseUrl, remote.workspace]);

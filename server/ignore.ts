@@ -102,12 +102,11 @@ export class IgnoreMatcher {
 }
 
 /**
- * Load ignore rules from a file
+ * Load ignore file content.
  */
-export async function loadIgnoreFile(filePath: string): Promise<IgnoreMatcher | null> {
+export async function loadIgnoreFile(filePath: string): Promise<string | null> {
   try {
-    const content = await fs.readFile(filePath, 'utf8');
-    return new IgnoreMatcher(content);
+    return await fs.readFile(filePath, 'utf8');
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
       return null;
@@ -118,27 +117,25 @@ export async function loadIgnoreFile(filePath: string): Promise<IgnoreMatcher | 
 
 /**
  * Create ignore matcher from environment variables
- * Falls back to AVENEDITOR_IGNORE_DIRS if no ignore file is specified
+ * Always merges AVENEDITOR_IGNORE_DIRS and ignore file rules.
+ * Order matters: env directory rules first, file rules second (so file rules can override via `!`).
  */
 export async function createIgnoreMatcher(
   ignoreFilePath: string | undefined,
   ignoredDirsEnv: string
 ): Promise<IgnoreMatcher> {
-  // Try to load from ignore file first
-  if (ignoreFilePath) {
-    const matcher = await loadIgnoreFile(ignoreFilePath);
-    if (matcher) {
-      return matcher;
-    }
-  }
-
-  // Fallback to comma-separated directory list
+  // Always include comma-separated directory rules.
   const dirs = ignoredDirsEnv
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
 
-  // Convert to .gitignore format
-  const content = dirs.map((dir) => `${dir}/`).join('\n');
-  return new IgnoreMatcher(content);
+  // Convert env directories to .gitignore-like rules.
+  const dirsContent = dirs.map((dir) => `${dir}/`).join('\n');
+
+  // Then append ignore file rules (if file exists).
+  const fileContent = ignoreFilePath ? await loadIgnoreFile(ignoreFilePath) : null;
+  const mergedContent = [dirsContent, fileContent || ''].filter(Boolean).join('\n');
+
+  return new IgnoreMatcher(mergedContent);
 }

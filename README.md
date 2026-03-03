@@ -95,8 +95,8 @@ Refer to [.env.example](./.env.example) for the full template. Key values:
 - `AVENEDITOR_WORKSPACE_ROOT` (optional): restrict allowed workspaces to a root directory
 - `AVENEDITOR_SESSION_TTL_MS` (optional, default `28800000`)
 - `AVENEDITOR_MAX_TREE_ENTRIES` (optional, default `5000`)
-- `AVENEDITOR_IGNORE_FILE` (optional): path to `.gitignore`-style ignore file
-- `AVENEDITOR_IGNORE_DIRS` (optional fallback, default `node_modules,.git,dist`)
+- `AVENEDITOR_IGNORE_FILE` (optional, default `.avenignore`): ignore file path/name (relative paths resolve from workspace root)
+- `AVENEDITOR_IGNORE_DIRS` (optional, default `node_modules,.git,dist`): always merged with ignore file rules
 - `AVENEDITOR_MAX_FILE_SIZE_BYTES` (optional, default `1048576`)
 - `AVENEDITOR_ALLOW_ORIGIN` (optional, default `*`)
 - `AVENEDITOR_HISTORY_ENABLED` (optional, default `true`)
