@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useEditorStore } from './store';
+import { useEditorStore, type FileType } from './store';
 import { useShallow } from 'zustand/react/shallow';
 import { FileList } from './components/FileList';
 import { Editor, EditorHandle } from './components/Editor';
@@ -7,6 +7,7 @@ import { Preview } from './components/Preview';
 import { Toolbar } from './components/Toolbar';
 import { CommandPalette } from './components/CommandPalette';
 import { CodeRunner } from './components/CodeRunner';
+import { ImagePreview } from './components/ImagePreview';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { RenameDialog } from './components/RenameDialog';
 import { ServerConnectDialog } from './components/ServerConnectDialog';
@@ -41,7 +42,7 @@ type AutoSaveEventDetail = {
 };
 
 const isRunnableFileType = (
-  type: string | undefined
+  type: FileType | undefined
 ): type is 'javascript' | 'typescript' | 'html' | 'python' =>
   type === 'javascript' || type === 'typescript' || type === 'html' || type === 'python';
 
@@ -58,6 +59,7 @@ export default function App() {
     isZenMode,
     toggleZenMode,
     remoteConnected,
+    remoteApiBaseUrl,
     remoteToken,
     remoteReadOnly,
     remoteLastError,
@@ -76,6 +78,7 @@ export default function App() {
       isZenMode: state.isZenMode,
       toggleZenMode: state.toggleZenMode,
       remoteConnected: state.remote.connected,
+      remoteApiBaseUrl: state.remote.apiBaseUrl,
       remoteToken: state.remote.token,
       remoteReadOnly: state.remote.readOnly,
       remoteLastError: state.remote.lastError,
@@ -97,6 +100,9 @@ export default function App() {
   const activeFile = files.find(f => f.id === activeFileId);
   const activeFileType = activeFile?.type;
   const isRunnableFile = isRunnableFileType(activeFileType);
+  const isImageFile = activeFileType === 'image';
+  const isUnsupportedFile = activeFileType === 'binary';
+  const isTextEditableFile = !isImageFile && !isUnsupportedFile;
 
   const handleExport = () => {
     if (!activeFile) return;
@@ -186,6 +192,12 @@ export default function App() {
       void loadServerFileContent(activeFileId);
     }
   }, [remoteConnected, remoteToken, files.length, activeFileId, refreshServerTree, loadServerFileContent]);
+
+  useEffect(() => {
+    if ((isImageFile || isUnsupportedFile) && viewMode !== 'preview') {
+      setViewMode('preview');
+    }
+  }, [isImageFile, isUnsupportedFile, setViewMode, viewMode]);
 
   useEffect(() => {
     let raf = 0;
@@ -288,10 +300,16 @@ export default function App() {
 
             <div className="flex items-center bg-editor-surface rounded-xl p-1">
               <button
-                onClick={() => setViewMode('edit')}
+                onClick={() => {
+                  if (isTextEditableFile) {
+                    setViewMode('edit');
+                  }
+                }}
+                disabled={!isTextEditableFile}
                 className={cn(
                   "p-1.5 rounded-lg transition-all",
-                  viewMode === 'edit' ? "bg-accent text-editor-bg" : "text-gray-500"
+                  viewMode === 'edit' ? "bg-accent text-editor-bg" : "text-gray-500",
+                  !isTextEditableFile && "opacity-40 cursor-not-allowed"
                 )}
               >
                 <Edit3 className="w-4 h-4" />
@@ -307,7 +325,7 @@ export default function App() {
                   {isRunnableFile ? <Terminal className="w-4 h-4" /> : <Columns className="w-4 h-4" />}
                 </button>
               )}
-              {activeFileType === 'markdown' && (
+              {(activeFileType === 'markdown' || isImageFile || isUnsupportedFile) && (
                 <button
                   onClick={() => setViewMode('preview')}
                   className={cn(
@@ -417,18 +435,24 @@ export default function App() {
               "flex-1 min-h-0 min-w-0",
               viewMode === 'split' && "h-1/2 border-b border-white/5"
             )}>
-              <Editor 
-                ref={editorRef}
-                content={activeFile?.content || ''} 
-                type={activeFile?.type || 'markdown'}
-                readOnly={remoteReadOnly}
-                onChange={(val) => {
-                  if (remoteReadOnly) {
-                    return;
-                  }
-                  updateFileContent(activeFileId, val);
-                }} 
-              />
+              {isTextEditableFile ? (
+                <Editor 
+                  ref={editorRef}
+                  content={activeFile?.content || ''} 
+                  type={activeFileType || 'markdown'}
+                  readOnly={remoteReadOnly}
+                  onChange={(val) => {
+                    if (remoteReadOnly) {
+                      return;
+                    }
+                    updateFileContent(activeFileId, val);
+                  }} 
+                />
+              ) : (
+                <div className="h-full flex items-center justify-center text-gray-500 italic">
+                  不支持在编辑器中打开此文件
+                </div>
+              )}
             </div>
           )}
 
@@ -445,9 +469,18 @@ export default function App() {
                   code={activeFile?.content || ''} 
                   type={activeFileType} 
                 />
+              ) : isImageFile && activeFile ? (
+                <ImagePreview
+                  fileId={activeFile.id}
+                  fileName={activeFile.name}
+                  apiBaseUrl={remoteApiBaseUrl}
+                  remoteConnected={remoteConnected}
+                  remoteToken={remoteToken}
+                  localContent={activeFile.content}
+                />
               ) : (
-                <div className="h-full flex items-center justify-center text-gray-600 italic">
-                  No preview available for this file type
+                <div className="h-full flex items-center justify-center text-gray-500 italic">
+                  不支持打开此文件
                 </div>
               )}
             </div>

@@ -5,7 +5,17 @@ import path from 'node:path';
 import express from 'express';
 import { IgnoreMatcher, createIgnoreMatcher } from './ignore.js';
 
-type FileType = 'markdown' | 'javascript' | 'typescript' | 'html' | 'css' | 'json' | 'python' | 'yaml';
+type FileType =
+  | 'markdown'
+  | 'javascript'
+  | 'typescript'
+  | 'html'
+  | 'css'
+  | 'json'
+  | 'python'
+  | 'yaml'
+  | 'image'
+  | 'binary';
 
 interface SessionData {
   workspace: string;
@@ -109,16 +119,92 @@ const parentIdOf = (id: string): string | null => {
 const toId = (workspace: string, absolutePath: string): string =>
   path.relative(workspace, absolutePath).split(path.sep).join('/');
 
+const extensionOf = (name: string): string => {
+  const idx = name.lastIndexOf('.');
+  return idx >= 0 ? name.slice(idx).toLowerCase() : '';
+};
+const imageExtensions = new Set([
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.webp',
+  '.svg',
+  '.bmp',
+  '.ico',
+  '.avif',
+]);
+const binaryExtensions = new Set([
+  '.pdf',
+  '.zip',
+  '.rar',
+  '.7z',
+  '.tar',
+  '.gz',
+  '.xz',
+  '.bz2',
+  '.exe',
+  '.dll',
+  '.so',
+  '.dylib',
+  '.bin',
+  '.woff',
+  '.woff2',
+  '.ttf',
+  '.otf',
+  '.eot',
+  '.mp3',
+  '.wav',
+  '.flac',
+  '.ogg',
+  '.mp4',
+  '.mov',
+  '.avi',
+  '.mkv',
+  '.webm',
+  '.doc',
+  '.docx',
+  '.xls',
+  '.xlsx',
+  '.ppt',
+  '.pptx',
+]);
+const mimeByExtension: Record<string, string> = {
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.bmp': 'image/bmp',
+  '.ico': 'image/x-icon',
+  '.avif': 'image/avif',
+  '.txt': 'text/plain; charset=utf-8',
+  '.md': 'text/markdown; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.ts': 'text/plain; charset=utf-8',
+  '.tsx': 'text/plain; charset=utf-8',
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.py': 'text/plain; charset=utf-8',
+  '.yml': 'text/yaml; charset=utf-8',
+  '.yaml': 'text/yaml; charset=utf-8',
+};
 const getFileType = (name: string): FileType => {
-  if (name.endsWith('.js')) return 'javascript';
-  if (name.endsWith('.ts') || name.endsWith('.tsx')) return 'typescript';
-  if (name.endsWith('.html')) return 'html';
-  if (name.endsWith('.css')) return 'css';
-  if (name.endsWith('.json')) return 'json';
-  if (name.endsWith('.py')) return 'python';
-  if (name.endsWith('.yml') || name.endsWith('.yaml')) return 'yaml';
+  const ext = extensionOf(name);
+  if (ext === '.js') return 'javascript';
+  if (ext === '.ts' || ext === '.tsx') return 'typescript';
+  if (ext === '.html') return 'html';
+  if (ext === '.css') return 'css';
+  if (ext === '.json') return 'json';
+  if (ext === '.py') return 'python';
+  if (ext === '.yml' || ext === '.yaml') return 'yaml';
+  if (imageExtensions.has(ext)) return 'image';
+  if (binaryExtensions.has(ext)) return 'binary';
   return 'markdown';
 };
+const getMimeType = (name: string): string => mimeByExtension[extensionOf(name)] || 'application/octet-stream';
 
 const isSafeName = (name: string): boolean =>
   !!name && name !== '.' && name !== '..' && !/[\\/]/.test(name) && !/\0/.test(name);
@@ -554,6 +640,31 @@ export const createApiApp = async (config: ApiConfig) => {
       const content = await fs.readFile(absolute, 'utf8');
       const hash = hashText(content);
       res.json({ content, updatedAt: stat.mtimeMs, contentHash: hash });
+    } catch (error) {
+      respondFsError(res, error);
+    }
+  });
+
+  app.get('/api/fs/file/raw', authMiddleware, async (req, res) => {
+    try {
+      const typed = req as AuthenticatedRequest;
+      const id = String(req.query.id || '');
+      const ignoreMatcher = await getIgnoreMatcherForWorkspace(typed.session.workspace);
+      assertPathNotIgnored(ignoreMatcher, id, false);
+      const absolute = resolveEntryPath(typed.session.workspace, id);
+      const stat = await fs.stat(absolute);
+      if (!stat.isFile()) {
+        res.status(400).json({ error: 'Path is not a file.' });
+        return;
+      }
+      if (stat.size > config.maxFileSizeBytes) {
+        res.status(413).json({ error: `File too large (>${config.maxFileSizeBytes} bytes).` });
+        return;
+      }
+      const bytes = await fs.readFile(absolute);
+      res.setHeader('Content-Type', getMimeType(path.basename(absolute)));
+      res.setHeader('Cache-Control', 'private, max-age=0, must-revalidate');
+      res.send(bytes);
     } catch (error) {
       respondFsError(res, error);
     }

@@ -22,7 +22,9 @@ export type FileType =
   | 'css'
   | 'json'
   | 'python'
-  | 'yaml';
+  | 'yaml'
+  | 'image'
+  | 'binary';
 
 export interface FileItem {
   id: string;
@@ -94,13 +96,64 @@ interface EditorStore {
 }
 
 const getFileType = (name: string): FileType => {
-  if (name.endsWith('.js')) return 'javascript';
-  if (name.endsWith('.ts') || name.endsWith('.tsx')) return 'typescript';
-  if (name.endsWith('.html')) return 'html';
-  if (name.endsWith('.css')) return 'css';
-  if (name.endsWith('.json')) return 'json';
-  if (name.endsWith('.py')) return 'python';
-  if (name.endsWith('.yml') || name.endsWith('.yaml')) return 'yaml';
+  const normalized = name.toLowerCase();
+  if (normalized.endsWith('.js')) return 'javascript';
+  if (normalized.endsWith('.ts') || normalized.endsWith('.tsx')) return 'typescript';
+  if (normalized.endsWith('.html')) return 'html';
+  if (normalized.endsWith('.css')) return 'css';
+  if (normalized.endsWith('.json')) return 'json';
+  if (normalized.endsWith('.py')) return 'python';
+  if (normalized.endsWith('.yml') || normalized.endsWith('.yaml')) return 'yaml';
+  if (
+    normalized.endsWith('.png') ||
+    normalized.endsWith('.jpg') ||
+    normalized.endsWith('.jpeg') ||
+    normalized.endsWith('.gif') ||
+    normalized.endsWith('.webp') ||
+    normalized.endsWith('.svg') ||
+    normalized.endsWith('.bmp') ||
+    normalized.endsWith('.ico') ||
+    normalized.endsWith('.avif')
+  ) {
+    return 'image';
+  }
+  if (
+    normalized.endsWith('.pdf') ||
+    normalized.endsWith('.zip') ||
+    normalized.endsWith('.rar') ||
+    normalized.endsWith('.7z') ||
+    normalized.endsWith('.tar') ||
+    normalized.endsWith('.gz') ||
+    normalized.endsWith('.xz') ||
+    normalized.endsWith('.bz2') ||
+    normalized.endsWith('.exe') ||
+    normalized.endsWith('.dll') ||
+    normalized.endsWith('.so') ||
+    normalized.endsWith('.dylib') ||
+    normalized.endsWith('.bin') ||
+    normalized.endsWith('.woff') ||
+    normalized.endsWith('.woff2') ||
+    normalized.endsWith('.ttf') ||
+    normalized.endsWith('.otf') ||
+    normalized.endsWith('.eot') ||
+    normalized.endsWith('.mp3') ||
+    normalized.endsWith('.wav') ||
+    normalized.endsWith('.flac') ||
+    normalized.endsWith('.ogg') ||
+    normalized.endsWith('.mp4') ||
+    normalized.endsWith('.mov') ||
+    normalized.endsWith('.avi') ||
+    normalized.endsWith('.mkv') ||
+    normalized.endsWith('.webm') ||
+    normalized.endsWith('.doc') ||
+    normalized.endsWith('.docx') ||
+    normalized.endsWith('.xls') ||
+    normalized.endsWith('.xlsx') ||
+    normalized.endsWith('.ppt') ||
+    normalized.endsWith('.pptx')
+  ) {
+    return 'binary';
+  }
   return 'markdown';
 };
 const isReadOnlyError = (message: string): boolean =>
@@ -720,6 +773,9 @@ export const useEditorStore = create<EditorStore>()(
         }
         const target = state.files.find((file) => file.id === id);
         if (!target) {
+          return;
+        }
+        if (target.type === 'image' || target.type === 'binary') {
           return;
         }
         const cacheKey = makeRemoteCacheKey(state.remote.workspace, id);

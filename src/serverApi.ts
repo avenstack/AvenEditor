@@ -134,6 +134,22 @@ export const fetchFileContent = async (
     { id }
   );
 
+export const fetchFileBlob = async (baseUrl: string, token: string, id: string): Promise<Blob> => {
+  const response = await fetch(buildUrl(baseUrl, '/api/fs/file/raw', { id }), {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error || `Request failed with status ${response.status}`);
+  }
+
+  return response.blob();
+};
+
 export const writeFileContent = async (
   baseUrl: string,
   token: string,

@@ -44,6 +44,8 @@ Current behavior supports two working modes:
 - `json` (`.json`)
 - `python` (`.py`)
 - `yaml` (`.yml`, `.yaml`)
+- `image` (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.svg`, `.bmp`, `.ico`, `.avif`) for preview
+- `binary` (e.g. `.pdf`, `.zip`, `.docx`, `.mp4`) shown as unsupported in editor window
 
 ## Local Development
 
