@@ -124,18 +124,40 @@ export async function createIgnoreMatcher(
   ignoreFilePath: string | undefined,
   ignoredDirsEnv: string
 ): Promise<IgnoreMatcher> {
-  // Always include comma-separated directory rules.
-  const dirs = ignoredDirsEnv
+  const entries = ignoredDirsEnv
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
 
-  // Convert env directories to .gitignore-like rules.
-  const dirsContent = dirs.map((dir) => `${dir}/`).join('\n');
+  const hasGlobMeta = (value: string): boolean => /[*?[\]{}]/.test(value);
+  const envRules = new Set<string>();
+
+  for (const rawEntry of entries) {
+    const entry = rawEntry.replace(/\\/g, '/').trim();
+    if (!entry) {
+      continue;
+    }
+
+    if (hasGlobMeta(entry)) {
+      envRules.add(entry);
+      continue;
+    }
+
+    const normalized = entry.replace(/^\/+/, '');
+    if (!normalized) {
+      continue;
+    }
+
+    // Match directory by name (legacy behavior), and also allow file ignore.
+    envRules.add(normalized.endsWith('/') ? normalized : `${normalized}/`);
+    envRules.add(normalized.endsWith('/') ? normalized.slice(0, -1) : normalized);
+  }
+
+  const envContent = Array.from(envRules).filter(Boolean).join('\n');
 
   // Then append ignore file rules (if file exists).
   const fileContent = ignoreFilePath ? await loadIgnoreFile(ignoreFilePath) : null;
-  const mergedContent = [dirsContent, fileContent || ''].filter(Boolean).join('\n');
+  const mergedContent = [envContent, fileContent || ''].filter(Boolean).join('\n');
 
   return new IgnoreMatcher(mergedContent);
 }
