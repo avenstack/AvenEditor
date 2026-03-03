@@ -6,6 +6,20 @@ Current behavior supports two working modes:
 - Local mode: files/folders are persisted in browser storage.
 - Server mode: connect to a filesystem workspace via `working directory + access key`.
 
+## Screenshots
+
+<table align="center">
+  <tr>
+    <td width="48%">
+      <img src="./assets/files.webp" alt="Files View" width="100%" />
+    </td>
+    <td width="4%"></td>
+    <td width="48%">
+      <img src="./assets/editor.webp" alt="Editor View" width="100%" />
+    </td>
+  </tr>
+</table>
+
 ## Current Features
 
 - Hierarchical file/folder browser with search
