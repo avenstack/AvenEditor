@@ -1,0 +1,24 @@
+services:
+  aveneditor:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: aveneditor:latest
+    container_name: aveneditor
+    restart: unless-stopped
+    ports:
+      - "${AVENEDITOR_HTTP_PORT:-3000}:3000"
+    environment:
+      PORT: "3000"
+      AVENEDITOR_ACCESS_KEY: "${AVENEDITOR_ACCESS_KEY}"
+      AVENEDITOR_WORKSPACE_ROOT: "/workspace"
+      AVENEDITOR_SESSION_TTL_MS: "${AVENEDITOR_SESSION_TTL_MS:-28800000}"
+      AVENEDITOR_MAX_TREE_ENTRIES: "${AVENEDITOR_MAX_TREE_ENTRIES:-5000}"
+      AVENEDITOR_IGNORE_DIRS: "${AVENEDITOR_IGNORE_DIRS:-node_modules,.git,dist}"
+      AVENEDITOR_MAX_FILE_SIZE_BYTES: "${AVENEDITOR_MAX_FILE_SIZE_BYTES:-1048576}"
+      AVENEDITOR_ALLOW_ORIGIN: "${AVENEDITOR_ALLOW_ORIGIN:-*}"
+      AVENEDITOR_HISTORY_ENABLED: "${AVENEDITOR_HISTORY_ENABLED:-true}"
+      AVENEDITOR_HISTORY_DIR: "${AVENEDITOR_HISTORY_DIR:-.history}"
+      AVENEDITOR_READ_ONLY: "${AVENEDITOR_READ_ONLY:-true}"
+    volumes:
+      - "${AVENEDITOR_WORKSPACE_HOST_PATH:-./workspace}:/workspace"

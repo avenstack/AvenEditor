@@ -1,0 +1,58 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-editor-bg: #0B0F14;
+  --color-editor-surface: #11161D;
+  --color-editor-active: #0E1319;
+  --color-accent: #00E5FF;
+  --color-accent-glow: rgba(0, 229, 255, 0.3);
+}
+
+@layer base {
+  body {
+    @apply bg-editor-bg text-gray-300 font-sans overflow-hidden;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+.glass {
+  @apply bg-editor-surface/80 backdrop-blur-xl border-t border-white/5;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* CodeMirror Overrides */
+.cm-editor {
+  height: 100% !important;
+}
+
+.cm-scroller {
+  font-family: var(--font-mono) !important;
+}
+
+.cm-gutters {
+  background-color: transparent !important;
+  border: none !important;
+  color: #3e4451 !important;
+}
+
+.cm-activeLine {
+  background-color: rgba(255, 255, 255, 0.03) !important;
+}
+
+.cm-cursor {
+  border-left-color: var(--color-accent) !important;
+  border-left-width: 2px !important;
+}
