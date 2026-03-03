@@ -1,23 +1,24 @@
 # AvenEditor
 
-AvenEditor is a mobile-first Markdown and code editor built with React, TypeScript, and Vite.
+AvenEditor is a mobile-first Markdown/code editor built with React, TypeScript, and Vite.
 
-It supports two modes:
-- Local mode: files are stored in browser local storage.
-- Server mode: connect to a server workspace using `working directory + key`, then edit real server files.
+Current behavior supports two working modes:
+- Local mode: files/folders are persisted in browser storage.
+- Server mode: connect to a filesystem workspace via `working directory + access key`.
 
-## Implemented Features
+## Current Features
 
-- File/folder browser with search
-- Create, rename, delete files and folders
-- CodeMirror editor
-- Markdown preview (`remark-gfm` + sanitize)
-- Code runner panel (`javascript`, `typescript`, `html`, `python`)
+- Hierarchical file/folder browser with search
+- Create, rename, delete files and folders (local or server mode)
+- CodeMirror editor with language-aware syntax
+- Markdown preview (`remark-gfm` + `rehype-sanitize`)
+- Code runner panel for `javascript`, `typescript`, `html`, `python`
 - Command palette (`Ctrl+K` / `Cmd+K`)
 - Zen mode
-- Custom dialogs (delete / rename / server connect)
-- Remote server workspace connection with key-based auth (MVP)
-- On-demand file loading with local cache reuse (matched by `contentHash`)
+- Server workspace connect/reconnect/disconnect dialog
+- On-demand server folder listing + lazy file loading
+- Remote file cache reuse keyed by `contentHash`
+- Optional write history snapshots (`.history`) on server
 
 ## Supported File Types
 
@@ -29,11 +30,11 @@ It supports two modes:
 - `json` (`.json`)
 - `python` (`.py`)
 
-## Run Locally
+## Local Development
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js `18+`
 - npm
 
 ### Install
@@ -42,60 +43,82 @@ It supports two modes:
 npm install
 ```
 
-### Fullstack Dev (Next.js-like single origin)
+### Fullstack Dev (recommended)
 
 ```bash
 npm run dev
 ```
 
-UI and API share same origin by default:
-- `http://localhost:3000`
+- Serves UI + API from one origin
+- Default URL: `http://localhost:3000`
+- HMR for fullstack dev is controlled by `AVENEDITOR_DEV_HMR` (default `false`)
 
-### Optional: Run UI Only
+### Client Only (Vite)
 
 ```bash
 npm run dev:client
 ```
 
-### Optional: Run API Only
+- Default URL: `http://localhost:3000` (script sets `--port=3000`)
+
+### API Only
 
 ```bash
 npm run dev:server
 ```
 
-API-only default URL:
-- `http://localhost:8787`
+- Default URL: `http://localhost:8787` (unless `PORT` is set)
+- If `dist/` exists, this process also serves built frontend assets
 
-### Type Check
-
-```bash
-npm run lint
-```
-
-### Test (Current Baseline)
-
-```bash
-npm test
-```
-
-### Build Frontend
+### Build and Run Production Server
 
 ```bash
 npm run build
+npm run server
 ```
 
-## Deploy with Docker
+### Type Check / Test
+
+```bash
+npm run lint
+npm test
+```
+
+`npm test` currently maps to the same TypeScript check as `npm run lint`.
+
+## Environment Variables
+
+Refer to [.env.example](./.env.example) for the full template. Key values:
+
+- `AVENEDITOR_ACCESS_KEY` (required): server auth key for session creation
+- `AVENEDITOR_WORKSPACE_ROOT` (optional): restrict allowed workspaces to a root directory
+- `AVENEDITOR_SESSION_TTL_MS` (optional, default `28800000`)
+- `AVENEDITOR_MAX_TREE_ENTRIES` (optional, default `5000`)
+- `AVENEDITOR_IGNORE_FILE` (optional): path to `.gitignore`-style ignore file
+- `AVENEDITOR_IGNORE_DIRS` (optional fallback, default `node_modules,.git,dist`)
+- `AVENEDITOR_MAX_FILE_SIZE_BYTES` (optional, default `1048576`)
+- `AVENEDITOR_ALLOW_ORIGIN` (optional, default `*`)
+- `AVENEDITOR_HISTORY_ENABLED` (optional, default `true`)
+- `AVENEDITOR_HISTORY_DIR` (optional, default `.history`)
+- `AVENEDITOR_READ_ONLY` (optional, default `true`)
+
+Important: write operations are blocked by default because `AVENEDITOR_READ_ONLY=true`.
+Set it to `false` when you want create/update/delete in server mode.
+
+## Docker Deployment
 
 ### 1) Prepare env
-
-Copy env template and set at least:
-- `AVENEDITOR_ACCESS_KEY` (required)
-- `AVENEDITOR_WORKSPACE_HOST_PATH` (host path to edit)
-- optional `AVENEDITOR_HTTP_PORT` (default `3000`)
 
 ```bash
 cp .env.example .env
 ```
+
+Set at least:
+- `AVENEDITOR_ACCESS_KEY`
+- `AVENEDITOR_WORKSPACE_HOST_PATH` (host path mounted to container `/workspace`)
+
+If you need write access from the editor:
+- `AVENEDITOR_READ_ONLY=false`
 
 ### 2) Start
 
@@ -103,55 +126,28 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-### 3) Open
+### 3) Connect from UI
 
-- UI + API same origin: `http://<server-ip>:<AVENEDITOR_HTTP_PORT>`
+- Open: `http://<server-ip>:<AVENEDITOR_HTTP_PORT>`
 - In `Server Workspace` dialog:
-  - `API Base URL`: same origin, e.g. `http://<server-ip>:3000`
+  - `API Base URL`: same origin (or leave empty to use current origin)
   - `Working Directory`: `/workspace`
-  - `Access Key`: your `AVENEDITOR_ACCESS_KEY`
+  - `Access Key`: value of `AVENEDITOR_ACCESS_KEY`
 
-## Server Mode Setup (MVP)
+## Server Mode Notes
 
-Set env values before starting server:
+- Access key is checked with constant-time comparison.
+- A bearer token is used after session creation.
+- Workspace traversal (`..`) is blocked.
+- Session token is not persisted across page reloads (reconnect after refresh).
 
-- `AVENEDITOR_ACCESS_KEY` (required): shared secret used to create session token
-- `AVENEDITOR_WORKSPACE_ROOT` (optional): restrict workspaces to a safe root directory
-- `AVENEDITOR_SESSION_TTL_MS` (optional): session TTL, default 8h
-- `AVENEDITOR_MAX_TREE_ENTRIES` (optional): workspace tree limit, default 5000
-- `AVENEDITOR_IGNORE_DIRS` (optional): comma-separated folder names ignored during tree scan (default `node_modules,.git,dist`)
-- `AVENEDITOR_MAX_FILE_SIZE_BYTES` (optional): max file read size, default 1MB
-- `AVENEDITOR_ALLOW_ORIGIN` (optional): CORS allowed origin, set explicit frontend origin in production
-- `AVENEDITOR_HISTORY_ENABLED` (optional): whether to write save diffs into history folder (default `true`)
-- `AVENEDITOR_HISTORY_DIR` (optional): history folder name (default `.history`)
+This project is still MVP-level security. For production hardening, add rate limiting, stronger auth/rotation, audit logs, and network controls.
 
-Check `.env.example` for full list.
-
-Then in UI:
-1. Open menu `...` -> `Server Workspace`
-2. Fill `API Base URL`, `Working Directory`, `Access Key`
-3. Click `Connect`
-
-When running `npm run dev` or Docker deployment, `API Base URL` can use current origin (or leave empty).
-
-After connecting, all file operations run against server filesystem APIs.
-For safer defaults, session tokens are not persisted across page reloads; reconnect after refresh.
-
-## Security Notes (MVP Scope)
-
-- Key is verified with constant-time comparison on server.
-- Key is only used to create a session; subsequent calls use bearer token.
-- Workspace path traversal is blocked.
-- Optional root restriction can confine allowed directories.
-- Use HTTPS in production.
-
-This is still MVP security; for production-hardening, add rate limiting, IP controls, audit logs, and stronger auth/rotation.
-
-See [SECURITY.md](./SECURITY.md) for vulnerability reporting guidance.
+See [SECURITY.md](./SECURITY.md) for vulnerability reporting.
 
 ## Contributing
 
-Contributions are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md).
+See [CONTRIBUTING.md](./CONTRIBUTING.md) and [CODE_OF_CONDUCT.md](./CODE_OF_CONDUCT.md).
 
 ## License
 
@@ -163,24 +159,20 @@ MIT, see [LICENSE](./LICENSE).
 server/
   apiApp.ts
   dev.ts
+  ignore.ts
   index.ts
 src/
   App.tsx
   store.ts
   serverApi.ts
   components/
-    FileList.tsx
-    Editor.tsx
-    Preview.tsx
     CodeRunner.tsx
-    Toolbar.tsx
     CommandPalette.tsx
     ConfirmDialog.tsx
+    Editor.tsx
+    FileList.tsx
+    Preview.tsx
     RenameDialog.tsx
     ServerConnectDialog.tsx
-docs/
-  architecture.md
-  design-spec.md
-  tech-stack.md
-  visual-design.md
+    Toolbar.tsx
 ```
