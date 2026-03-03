@@ -36,7 +36,7 @@ const start = async () => {
     console.log(`[aveneditor-api] listening on :${config.port}`);
     console.log(`[aveneditor-api] mode: ${hasDist ? 'fullstack (ui+api)' : 'api-only'}`);
     console.log(`[aveneditor-api] allowed root: ${config.allowedRoot || '(not restricted)'}`);
-    console.log(`[aveneditor-api] session ttl: ${config.sessionTtlMs}ms`);
+    console.log(`[aveneditor-api] session ttl: ${config.sessionTtlSeconds}s`);
   });
 };
 

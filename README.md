@@ -93,7 +93,7 @@ Refer to [.env.example](./.env.example) for the full template. Key values:
 
 - `AVENEDITOR_ACCESS_KEY` (required): server auth key for session creation
 - `AVENEDITOR_WORKSPACE_ROOT` (optional): restrict allowed workspaces to a root directory
-- `AVENEDITOR_SESSION_TTL_MS` (optional, default `28800000`)
+- `AVENEDITOR_SESSION_TTL_SECONDS` (optional, default `604800`)
 - `AVENEDITOR_MAX_TREE_ENTRIES` (optional, default `5000`)
 - `AVENEDITOR_IGNORE_FILE` (optional, default `.avenignore`): ignore file path/name (relative paths resolve from workspace root)
 - `AVENEDITOR_IGNORE_DIRS` (optional, default `node_modules,.git,dist`): always merged with ignore file rules
@@ -140,7 +140,8 @@ docker compose up -d --build
 - Access key is checked with constant-time comparison.
 - A bearer token is used after session creation.
 - Workspace traversal (`..`) is blocked.
-- Session token is not persisted across page reloads (reconnect after refresh).
+- Session token is persisted across page refresh while still valid.
+- Session validity is controlled by `AVENEDITOR_SESSION_TTL_SECONDS` (server-side).
 
 This project is still MVP-level security. For production hardening, add rate limiting, stronger auth/rotation, audit logs, and network controls.
 

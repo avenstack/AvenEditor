@@ -47,6 +47,7 @@ export interface RemoteState {
   apiBaseUrl: string;
   workspace: string;
   token: string | null;
+  expiresAt: number | null;
   readOnly: boolean;
   lastError: string | null;
   isListing: boolean;
@@ -104,6 +105,8 @@ const getFileType = (name: string): FileType => {
 };
 const isReadOnlyError = (message: string): boolean =>
   message.toLowerCase().includes('read-only mode is enabled');
+const isValidSessionExpiry = (expiresAt: number | null): expiresAt is number =>
+  typeof expiresAt === 'number' && Number.isFinite(expiresAt) && expiresAt > Date.now();
 
 const saveTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -172,6 +175,7 @@ export const useEditorStore = create<EditorStore>()(
         apiBaseUrl: '',
         workspace: '',
         token: null,
+        expiresAt: null,
         readOnly: false,
         lastError: null,
         isListing: false,
@@ -339,6 +343,7 @@ export const useEditorStore = create<EditorStore>()(
                   ...prev.remote,
                   connected: false,
                   token: null,
+                  expiresAt: null,
                   lastError: 'Session expired. Auto-save paused. Please reconnect.',
                   isListing: false,
                   listingParentId: null,
@@ -554,6 +559,7 @@ export const useEditorStore = create<EditorStore>()(
               apiBaseUrl: apiBaseUrl.trim(),
               workspace: session.workspace,
               token: session.token,
+              expiresAt: session.expiresAt,
               readOnly: sessionReadOnly,
               lastError: null,
               isListing: false,
@@ -572,6 +578,7 @@ export const useEditorStore = create<EditorStore>()(
               ...prev.remote,
               connected: false,
               token: null,
+              expiresAt: null,
               readOnly: false,
               lastError: (error as Error).message,
               isListing: false,
@@ -599,6 +606,7 @@ export const useEditorStore = create<EditorStore>()(
             ...prev.remote,
             connected: false,
             token: null,
+            expiresAt: null,
             readOnly: false,
             lastError: null,
             isListing: false,
@@ -686,6 +694,7 @@ export const useEditorStore = create<EditorStore>()(
                 ...prev.remote,
                 connected: false,
                 token: null,
+                expiresAt: null,
                 lastError: 'Session expired. Please reconnect in Server Workspace.',
                 isListing: false,
                 listingParentId: null,
@@ -759,6 +768,7 @@ export const useEditorStore = create<EditorStore>()(
                 ...prev.remote,
                 connected: false,
                 token: null,
+                expiresAt: null,
                 lastError: 'Session expired. Please reconnect in Server Workspace.',
                 isListing: false,
                 listingParentId: null,
@@ -785,23 +795,30 @@ export const useEditorStore = create<EditorStore>()(
     }),
     {
       name: 'aven-editor-storage',
-      partialize: (state) => ({
-        files: state.files,
-        folders: state.folders,
-        activeFileId: state.activeFileId,
-        currentFolderId: state.currentFolderId,
-        viewMode: state.viewMode,
-        isZenMode: state.isZenMode,
-        remoteFileCache: state.remoteFileCache,
-        remote: {
-          ...state.remote,
-          connected: false,
-          token: null,
-          isListing: false,
-          listingParentId: null,
-          lastError: null,
-        },
-      }),
+      partialize: (state) => {
+        const canReuseSession =
+          !!state.remote.token &&
+          state.remote.connected &&
+          isValidSessionExpiry(state.remote.expiresAt);
+        return {
+          files: state.files,
+          folders: state.folders,
+          activeFileId: state.activeFileId,
+          currentFolderId: state.currentFolderId,
+          viewMode: state.viewMode,
+          isZenMode: state.isZenMode,
+          remoteFileCache: state.remoteFileCache,
+          remote: {
+            ...state.remote,
+            connected: canReuseSession,
+            token: canReuseSession ? state.remote.token : null,
+            expiresAt: canReuseSession ? state.remote.expiresAt : null,
+            isListing: false,
+            listingParentId: null,
+            lastError: null,
+          },
+        };
+      },
     }
   )
 );

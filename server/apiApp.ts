@@ -41,7 +41,7 @@ export interface ApiConfig {
   accessKey: string;
   allowOrigin: string;
   allowedRoot: string | null;
-  sessionTtlMs: number;
+  sessionTtlSeconds: number;
   maxTreeEntries: number;
   maxFileSizeBytes: number;
   ignoreFile: string | undefined;
@@ -52,6 +52,31 @@ export interface ApiConfig {
 }
 
 const envValue = (name: string): string | undefined => process.env[`AVENEDITOR_${name}`];
+const parsePositiveNumber = (value: string | undefined): number | null => {
+  if (!value) {
+    return null;
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return null;
+  }
+  return parsed;
+};
+
+const resolveSessionTtlSeconds = (): number => {
+  const bySeconds = parsePositiveNumber(envValue('SESSION_TTL_SECONDS'));
+  if (bySeconds !== null) {
+    return bySeconds;
+  }
+
+  // Backward compatibility for existing environments.
+  const byMs = parsePositiveNumber(envValue('SESSION_TTL_MS'));
+  if (byMs !== null) {
+    return Math.max(1, Math.floor(byMs / 1000));
+  }
+
+  return 7 * 24 * 60 * 60;
+};
 
 export const getApiConfig = (defaultPort: number): ApiConfig => ({
   port: Number(process.env.PORT || defaultPort),
@@ -60,7 +85,7 @@ export const getApiConfig = (defaultPort: number): ApiConfig => ({
   allowedRoot: envValue('WORKSPACE_ROOT')
     ? path.resolve(envValue('WORKSPACE_ROOT')!)
     : null,
-  sessionTtlMs: Number(envValue('SESSION_TTL_MS') || 8 * 60 * 60 * 1000),
+  sessionTtlSeconds: resolveSessionTtlSeconds(),
   maxTreeEntries: Number(envValue('MAX_TREE_ENTRIES') || 5000),
   maxFileSizeBytes: Number(envValue('MAX_FILE_SIZE_BYTES') || 1024 * 1024),
   ignoreFile: envValue('IGNORE_FILE') || '.avenignore',
@@ -425,15 +450,16 @@ export const createApiApp = async (config: ApiConfig) => {
 
       const resolvedWorkspace = await resolveWorkspace(workspace, config.allowedRoot);
       const token = createToken();
+      const ttlMs = config.sessionTtlSeconds * 1000;
       sessions.set(token, {
         workspace: resolvedWorkspace,
-        expiresAt: Date.now() + config.sessionTtlMs,
+        expiresAt: Date.now() + ttlMs,
       });
 
       res.json({
         token,
         workspace: resolvedWorkspace,
-        expiresAt: Date.now() + config.sessionTtlMs,
+        expiresAt: Date.now() + ttlMs,
         readOnly: config.readOnly,
       });
     } catch (error) {
