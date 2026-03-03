@@ -169,6 +169,43 @@ const resolveEntryPath = (workspace: string, id: string): string => {
   }
   return absolute;
 };
+const IGNORED_PATH_ERROR = 'Path is ignored by ignore rules.';
+const hasIgnoredAncestor = (ignoreMatcher: IgnoreMatcher, id: string): boolean => {
+  const normalized = normalizeId(id);
+  if (!normalized) {
+    return false;
+  }
+  const segments = normalized.split('/').filter(Boolean);
+  if (segments.length <= 1) {
+    return false;
+  }
+  let current = '';
+  for (let index = 0; index < segments.length - 1; index += 1) {
+    current = current ? `${current}/${segments[index]}` : segments[index];
+    if (ignoreMatcher.matches(current, true)) {
+      return true;
+    }
+  }
+  return false;
+};
+const assertPathNotIgnored = (ignoreMatcher: IgnoreMatcher, id: string, isDirectory: boolean): void => {
+  const normalized = normalizeId(id);
+  if (!normalized) {
+    return;
+  }
+  if (hasIgnoredAncestor(ignoreMatcher, normalized) || ignoreMatcher.matches(normalized, isDirectory)) {
+    throw new Error(IGNORED_PATH_ERROR);
+  }
+};
+const respondFsError = (res: express.Response, error: unknown): void => {
+  const message =
+    error instanceof Error && error.message ? error.message : 'Unexpected filesystem error.';
+  if (message === IGNORED_PATH_ERROR) {
+    res.status(403).json({ error: message });
+    return;
+  }
+  res.status(400).json({ error: message });
+};
 
 const createToken = (): string => crypto.randomBytes(32).toString('hex');
 const hashText = (value: string): string => crypto.createHash('sha256').update(value).digest('hex');
@@ -359,6 +396,9 @@ export const createApiApp = async (config: ApiConfig) => {
     parentId: string | null
   ): Promise<{ files: FileMeta[]; folders: FolderMeta[]; parentId: string | null }> => {
     const ignoreMatcher = await getIgnoreMatcherForWorkspace(workspace);
+    if (parentId) {
+      assertPathNotIgnored(ignoreMatcher, parentId, true);
+    }
     const targetDir = parentId ? resolveEntryPath(workspace, parentId) : workspace;
     await ensureDirectory(targetDir);
 
@@ -479,7 +519,7 @@ export const createApiApp = async (config: ApiConfig) => {
       const tree = await buildTree(typed.session.workspace);
       res.json(tree);
     } catch (error) {
-      res.status(400).json({ error: (error as Error).message });
+      respondFsError(res, error);
     }
   });
 
@@ -491,7 +531,7 @@ export const createApiApp = async (config: ApiConfig) => {
       const result = await listDirectory(typed.session.workspace, parentId);
       res.json(result);
     } catch (error) {
-      res.status(400).json({ error: (error as Error).message });
+      respondFsError(res, error);
     }
   });
 
@@ -499,6 +539,8 @@ export const createApiApp = async (config: ApiConfig) => {
     try {
       const typed = req as AuthenticatedRequest;
       const id = String(req.query.id || '');
+      const ignoreMatcher = await getIgnoreMatcherForWorkspace(typed.session.workspace);
+      assertPathNotIgnored(ignoreMatcher, id, false);
       const absolute = resolveEntryPath(typed.session.workspace, id);
       const stat = await fs.stat(absolute);
       if (!stat.isFile()) {
@@ -513,7 +555,7 @@ export const createApiApp = async (config: ApiConfig) => {
       const hash = hashText(content);
       res.json({ content, updatedAt: stat.mtimeMs, contentHash: hash });
     } catch (error) {
-      res.status(400).json({ error: (error as Error).message });
+      respondFsError(res, error);
     }
   });
 
@@ -522,6 +564,8 @@ export const createApiApp = async (config: ApiConfig) => {
       const typed = req as AuthenticatedRequest;
       const id = String(req.body?.id || '');
       const content = String(req.body?.content ?? '');
+      const ignoreMatcher = await getIgnoreMatcherForWorkspace(typed.session.workspace);
+      assertPathNotIgnored(ignoreMatcher, id, false);
       const absolute = resolveEntryPath(typed.session.workspace, id);
       const previousContent = await fs.readFile(absolute, 'utf8').catch(() => '');
       await fs.mkdir(path.dirname(absolute), { recursive: true });
@@ -532,7 +576,7 @@ export const createApiApp = async (config: ApiConfig) => {
       const stat = await fs.stat(absolute);
       res.json({ ok: true, updatedAt: stat.mtimeMs, contentHash: hashText(content) });
     } catch (error) {
-      res.status(400).json({ error: (error as Error).message });
+      respondFsError(res, error);
     }
   });
 
@@ -542,10 +586,15 @@ export const createApiApp = async (config: ApiConfig) => {
       const parentId = req.body?.parentId ? normalizeId(String(req.body.parentId)) : null;
       const name = String(req.body?.name || '').trim();
       const content = String(req.body?.content ?? '');
+      const ignoreMatcher = await getIgnoreMatcherForWorkspace(typed.session.workspace);
 
       if (!isSafeName(name)) {
         res.status(400).json({ error: 'Invalid file name.' });
         return;
+      }
+
+      if (parentId) {
+        assertPathNotIgnored(ignoreMatcher, parentId, true);
       }
 
       const parentAbsolute = parentId
@@ -555,6 +604,7 @@ export const createApiApp = async (config: ApiConfig) => {
 
       const absolute = path.join(parentAbsolute, name);
       const id = toId(typed.session.workspace, absolute);
+      assertPathNotIgnored(ignoreMatcher, id, false);
       const existing = await fs
         .stat(absolute)
         .then(() => true)
@@ -575,7 +625,7 @@ export const createApiApp = async (config: ApiConfig) => {
       contentHash: hashText(content),
     });
     } catch (error) {
-      res.status(400).json({ error: (error as Error).message });
+      respondFsError(res, error);
     }
   });
 
@@ -584,11 +634,13 @@ export const createApiApp = async (config: ApiConfig) => {
       const typed = req as AuthenticatedRequest;
       const id = String(req.body?.id || '');
       const name = String(req.body?.name || '').trim();
+      const ignoreMatcher = await getIgnoreMatcherForWorkspace(typed.session.workspace);
       if (!isSafeName(name)) {
         res.status(400).json({ error: 'Invalid file name.' });
         return;
       }
 
+      assertPathNotIgnored(ignoreMatcher, id, false);
       const currentAbsolute = resolveEntryPath(typed.session.workspace, id);
       const stat = await fs.stat(currentAbsolute);
       if (!stat.isFile()) {
@@ -598,10 +650,11 @@ export const createApiApp = async (config: ApiConfig) => {
 
       const nextAbsolute = path.join(path.dirname(currentAbsolute), name);
       const nextId = toId(typed.session.workspace, nextAbsolute);
+      assertPathNotIgnored(ignoreMatcher, nextId, false);
       await fs.rename(currentAbsolute, nextAbsolute);
       res.json({ ok: true, id: nextId, name });
     } catch (error) {
-      res.status(400).json({ error: (error as Error).message });
+      respondFsError(res, error);
     }
   });
 
@@ -609,6 +662,8 @@ export const createApiApp = async (config: ApiConfig) => {
     try {
       const typed = req as AuthenticatedRequest;
       const id = String(req.query.id || '');
+      const ignoreMatcher = await getIgnoreMatcherForWorkspace(typed.session.workspace);
+      assertPathNotIgnored(ignoreMatcher, id, false);
       const absolute = resolveEntryPath(typed.session.workspace, id);
       const stat = await fs.stat(absolute);
       if (!stat.isFile()) {
@@ -618,7 +673,7 @@ export const createApiApp = async (config: ApiConfig) => {
       await fs.rm(absolute);
       res.json({ ok: true });
     } catch (error) {
-      res.status(400).json({ error: (error as Error).message });
+      respondFsError(res, error);
     }
   });
 
@@ -627,9 +682,14 @@ export const createApiApp = async (config: ApiConfig) => {
       const typed = req as AuthenticatedRequest;
       const parentId = req.body?.parentId ? normalizeId(String(req.body.parentId)) : null;
       const name = String(req.body?.name || '').trim();
+      const ignoreMatcher = await getIgnoreMatcherForWorkspace(typed.session.workspace);
       if (!isSafeName(name)) {
         res.status(400).json({ error: 'Invalid folder name.' });
         return;
+      }
+
+      if (parentId) {
+        assertPathNotIgnored(ignoreMatcher, parentId, true);
       }
 
       const parentAbsolute = parentId
@@ -639,6 +699,7 @@ export const createApiApp = async (config: ApiConfig) => {
 
       const absolute = path.join(parentAbsolute, name);
       const id = toId(typed.session.workspace, absolute);
+      assertPathNotIgnored(ignoreMatcher, id, true);
       await fs.mkdir(absolute, { recursive: false });
       const stat = await fs.stat(absolute);
       res.json({
@@ -648,7 +709,7 @@ export const createApiApp = async (config: ApiConfig) => {
         updatedAt: stat.mtimeMs,
       });
     } catch (error) {
-      res.status(400).json({ error: (error as Error).message });
+      respondFsError(res, error);
     }
   });
 
@@ -657,11 +718,13 @@ export const createApiApp = async (config: ApiConfig) => {
       const typed = req as AuthenticatedRequest;
       const id = String(req.body?.id || '');
       const name = String(req.body?.name || '').trim();
+      const ignoreMatcher = await getIgnoreMatcherForWorkspace(typed.session.workspace);
       if (!isSafeName(name)) {
         res.status(400).json({ error: 'Invalid folder name.' });
         return;
       }
 
+      assertPathNotIgnored(ignoreMatcher, id, true);
       const currentAbsolute = resolveEntryPath(typed.session.workspace, id);
       const stat = await fs.stat(currentAbsolute);
       if (!stat.isDirectory()) {
@@ -671,10 +734,11 @@ export const createApiApp = async (config: ApiConfig) => {
 
       const nextAbsolute = path.join(path.dirname(currentAbsolute), name);
       const nextId = toId(typed.session.workspace, nextAbsolute);
+      assertPathNotIgnored(ignoreMatcher, nextId, true);
       await fs.rename(currentAbsolute, nextAbsolute);
       res.json({ ok: true, id: nextId, name });
     } catch (error) {
-      res.status(400).json({ error: (error as Error).message });
+      respondFsError(res, error);
     }
   });
 
@@ -682,6 +746,8 @@ export const createApiApp = async (config: ApiConfig) => {
     try {
       const typed = req as AuthenticatedRequest;
       const id = String(req.query.id || '');
+      const ignoreMatcher = await getIgnoreMatcherForWorkspace(typed.session.workspace);
+      assertPathNotIgnored(ignoreMatcher, id, true);
       const absolute = resolveEntryPath(typed.session.workspace, id);
       const stat = await fs.stat(absolute);
       if (!stat.isDirectory()) {
@@ -691,7 +757,7 @@ export const createApiApp = async (config: ApiConfig) => {
       await fs.rm(absolute, { recursive: true, force: false });
       res.json({ ok: true });
     } catch (error) {
-      res.status(400).json({ error: (error as Error).message });
+      respondFsError(res, error);
     }
   });
 
